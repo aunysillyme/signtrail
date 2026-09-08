@@ -220,7 +220,7 @@ async function createEnvelope(appEnv, { fields, owner = OWNER_EMAIL, expiresInDa
   return { response, preparedPdf, originalHash, metadata };
 }
 
-async function makeProof({ metadata, originalHash, signedPdf, fieldOverrides = {}, topLevelExtra = null }) {
+async function makeProof({ metadata, originalHash, signedPdf, fieldOverrides = {}, topLevelExtra = null, extraEvents = [] }) {
   const signedHash = await testing.sha256Hex(signedPdf);
   const payload = {
     format: "signtrail-proof-capsule",
@@ -242,7 +242,7 @@ async function makeProof({ metadata, originalHash, signedPdf, fieldOverrides = {
       placement: { x: field.x, y: field.y, width: field.width, height: field.height },
       ...(fieldOverrides[field.id] || {})
     })),
-    events: [{ type: "field_completed", title: "Required fields completed", timestamp: "2026-07-29T20:04:00.000Z", page: 1, fieldId: metadata.fields[0].id }],
+    events: [{ type: "field_completed", title: "Required fields completed", timestamp: "2026-07-29T20:04:00.000Z", page: 1, fieldId: metadata.fields[0].id }, ...extraEvents],
     verificationScope: "byte-for-byte-document-match",
     identityAssurance: "none"
   };
@@ -394,4 +394,44 @@ test("management requires both the bearer credential and the creator account", a
   assert.equal(deleted.status, 200);
   assert.equal(appEnv.DB.rows.length, 0);
   assert.equal(appEnv.DOCUMENTS.objects.size, 0);
+});
+
+test("a certificate_appended event completes hosted signing, and an out-of-range page is still rejected", async () => {
+  const certEvent = { type: "certificate_appended", title: "Certificate of Completion generated and appended", timestamp: "2026-07-29T20:04:30.000Z" };
+
+  // The certificate page is added after the envelope was created, so the stored
+  // page_count never covers it. An event pinned to that page must stay rejected.
+  const rejectingEnv = env();
+  const rejected = await createEnvelope(rejectingEnv);
+  const rejectedToken = tokenFromShareUrl((await parseJson(rejected.response)).shareUrl);
+  const signedPdf = new TextEncoder().encode("%PDF-1.4\ncertificate-signed-document\n%%EOF");
+  const outOfRange = await makeProof({
+    metadata: rejected.metadata,
+    originalHash: rejected.originalHash,
+    signedPdf,
+    extraEvents: [{ ...certEvent, page: rejected.metadata.pageCount + 1 }]
+  });
+  const outOfRangeResponse = await complete(rejectingEnv, rejectedToken, outOfRange.proof, signedPdf, outOfRange.signedHash);
+  assert.equal(outOfRangeResponse.status, 400);
+  assert.equal(rejectingEnv.DB.rows[0].status, "sent");
+
+  // Without that page reference the same event is ordinary trail data and the
+  // hosted completion has to succeed, with the event preserved in the receipt.
+  const appEnv = env();
+  const created = await createEnvelope(appEnv);
+  const recipientToken = tokenFromShareUrl((await parseJson(created.response)).shareUrl);
+  const valid = await makeProof({
+    metadata: created.metadata,
+    originalHash: created.originalHash,
+    signedPdf,
+    extraEvents: [certEvent]
+  });
+  const response = await complete(appEnv, recipientToken, valid.proof, signedPdf, valid.signedHash);
+  assert.equal(response.status, 200);
+  const payload = await parseJson(response);
+  const stored = payload.proofCapsule.events.find(event => event.type === "certificate_appended");
+  assert.ok(stored, "the certificate event survives receipt sanitization");
+  assert.equal(stored.title, certEvent.title);
+  assert.equal("page" in stored, false);
+  assert.equal(appEnv.DB.rows[0].status, "completed");
 });
