@@ -59,9 +59,6 @@
       landing: document.getElementById('landing'),
       verifier: document.getElementById('verifier'),
       app: document.getElementById('app'),
-      themeToggleLanding: document.getElementById('themeToggleLanding'),
-      themeToggleVerifier: document.getElementById('themeToggleVerifier'),
-      themeToggleTop: document.getElementById('themeToggleTop'),
       openVerifierButton: document.getElementById('openVerifierButton'),
       openHistoryButton: document.getElementById('openHistoryButton'),
       backFromVerifierButton: document.getElementById('backFromVerifierButton'),
@@ -436,11 +433,11 @@
           disableJavaScript: true,
           enableXfa: false,
           isEvalSupported: false,
-          cMapUrl: '/vendor/pdfjs/cmaps/',
+          cMapUrl: './vendor/pdfjs/cmaps/',
           cMapPacked: true,
-          iccUrl: '/vendor/pdfjs/iccs/',
-          standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
-          wasmUrl: '/vendor/pdfjs/wasm/',
+          iccUrl: './vendor/pdfjs/iccs/',
+          standardFontDataUrl: './vendor/pdfjs/standard_fonts/',
+          wasmUrl: './vendor/pdfjs/wasm/',
           useWorkerFetch: true
         });
         const pdf = await loadingTask.promise;
@@ -1175,225 +1172,47 @@
       return new Uint8Array(await pdfDoc.save());
     }
 
+    // The layout lives in certificate-layout.mjs so it can be unit tested without
+    // a PDF runtime. Here we only replay its drawing operations onto the page.
     async function appendCertificateOfCompletion(pdfDoc, { font, boldFont, rgb }) {
+      const layout = window.SignTrailCertificateLayout;
+      if (!layout) throw new Error('The certificate layout module is unavailable.');
+
       const pages = pdfDoc.getPages();
-      const firstPage = pages[0];
-      const pageSize = firstPage ? firstPage.getSize() : { width: 612, height: 792 };
-      const certPage = pdfDoc.addPage([pageSize.width, pageSize.height]);
-      const { width, height } = certPage.getSize();
-
-      const marginX = 40;
-      const contentWidth = width - (marginX * 2);
-      let y = height - 42;
-
-      certPage.drawLine({
-        start: { x: marginX, y },
-        end: { x: width - marginX, y },
-        thickness: 3,
-        color: rgb(0.41, 0.33, 1.0)
-      });
-      y -= 22;
-
-      certPage.drawText('SIGNTRAIL - PORTABLE INTEGRITY TRAIL', {
-        x: marginX,
-        y,
-        size: 8,
-        font: boldFont,
-        color: rgb(0.41, 0.33, 1.0)
-      });
-      y -= 18;
-
-      certPage.drawText('Certificate of Completion', {
-        x: marginX,
-        y,
-        size: 18,
-        font: boldFont,
-        color: rgb(0.09, 0.09, 0.13)
-      });
-
-      const verIdText = `ID: ${state.verificationId}`;
-      const verIdWidth = boldFont.widthOfTextAtSize(verIdText, 9);
-      certPage.drawText(verIdText, {
-        x: width - marginX - verIdWidth,
-        y: y + 2,
-        size: 9,
-        font: boldFont,
-        color: rgb(0.41, 0.33, 1.0)
-      });
-      y -= 14;
-
-      certPage.drawText('Cryptographic document manifest and tamper-evident signing record.', {
-        x: marginX,
-        y,
-        size: 8.5,
-        font,
-        color: rgb(0.41, 0.42, 0.47)
-      });
-      y -= 16;
-
-      certPage.drawLine({
-        start: { x: marginX, y },
-        end: { x: width - marginX, y },
-        thickness: 0.75,
-        color: rgb(0.89, 0.89, 0.92)
-      });
-      y -= 20;
-
-      const boxHeight = 110;
-      certPage.drawRectangle({
-        x: marginX,
-        y: y - boxHeight,
-        width: contentWidth,
-        height: boxHeight,
-        color: rgb(0.98, 0.98, 0.99),
-        borderColor: rgb(0.89, 0.89, 0.92),
-        borderWidth: 0.75
-      });
+      const sourceSize = pages[0] ? pages[0].getSize() : { width: 612, height: 792 };
+      const measure = (text, size, bold) => (bold ? boldFont : font).widthOfTextAtSize(text, size);
 
       const signerIdentity = state.recipientAuthenticatedEmail
         ? `${state.recipientAuthenticatedName || 'Signee'} (${state.recipientAuthenticatedEmail})`
         : (state.recipientMode ? 'Anonymous Recipient (Verified Bearer Link)' : 'Document Owner / Local Signer');
 
-      const leftColX = marginX + 14;
-      const rightColX = marginX + (contentWidth / 2) + 10;
-      let cardY = y - 18;
+      const { size, ops } = layout.buildCertificateOps({
+        verificationId: state.verificationId,
+        documentName: state.file?.name || 'Document.pdf',
+        completedAt: formatDateTime(state.finalizedAt),
+        signerIdentity,
+        originalHash: state.originalHash,
+        sourcePageCount: pages.length,
+        sourcePageSize: sourceSize,
+        fields: state.fields.filter(field => field.completed).map(field => ({
+          label: (FIELD_DEFS[field.type] || FIELD_DEFS.text).label || field.type,
+          page: field.pageIndex + 1,
+          assignee: field.assignedTo === 'recipient' ? 'Recipient' : 'Self / Owner'
+        }))
+      }, measure);
 
-      certPage.drawText('DOCUMENT NAME', { x: leftColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
-      certPage.drawText('COMPLETED AT', { x: rightColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
-      cardY -= 12;
-
-      const docName = String(state.file?.name || 'Document.pdf').slice(0, 42);
-      certPage.drawText(docName, { x: leftColX, y: cardY, size: 9, font: boldFont, color: rgb(0.09, 0.09, 0.13) });
-      certPage.drawText(formatDateTime(state.finalizedAt), { x: rightColX, y: cardY, size: 9, font, color: rgb(0.09, 0.09, 0.13) });
-      cardY -= 20;
-
-      certPage.drawText('SIGNER IDENTITY', { x: leftColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
-      certPage.drawText('DOCUMENT SCOPE', { x: rightColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
-      cardY -= 12;
-
-      certPage.drawText(signerIdentity.slice(0, 48), { x: leftColX, y: cardY, size: 8.5, font, color: rgb(0.09, 0.09, 0.13) });
-      certPage.drawText(`${pages.length} Original Page(s) + 1 Certificate Page`, { x: rightColX, y: cardY, size: 8.5, font, color: rgb(0.09, 0.09, 0.13) });
-      cardY -= 20;
-
-      certPage.drawText('ORIGINAL DOCUMENT SHA-256 FINGERPRINT', { x: leftColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
-      cardY -= 11;
-      certPage.drawText(state.originalHash || 'N/A', { x: leftColX, y: cardY, size: 7.5, font, color: rgb(0.09, 0.09, 0.13) });
-
-      y -= (boxHeight + 24);
-
-      certPage.drawText('FIELD COMPLETION INVENTORY', { x: marginX, y, size: 8, font: boldFont, color: rgb(0.41, 0.33, 1.0) });
-      y -= 14;
-
-      certPage.drawRectangle({
-        x: marginX,
-        y: y - 16,
-        width: contentWidth,
-        height: 18,
-        color: rgb(0.93, 0.93, 0.96)
-      });
-      certPage.drawText('#', { x: marginX + 8, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
-      certPage.drawText('FIELD TYPE', { x: marginX + 30, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
-      certPage.drawText('PAGE', { x: marginX + 160, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
-      certPage.drawText('ASSIGNEE', { x: marginX + 225, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
-      certPage.drawText('STATUS', { x: marginX + 330, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
-      y -= 20;
-
-      const completedFields = state.fields.filter(field => field.completed);
-      const displayFields = completedFields.slice(0, 10);
-      for (let i = 0; i < displayFields.length; i++) {
-        const field = displayFields[i];
-        const def = FIELD_DEFS[field.type] || FIELD_DEFS.text;
-        const lineY = y - 11;
-
-        certPage.drawText(String(i + 1), { x: marginX + 8, y: lineY, size: 8, font, color: rgb(0.2, 0.22, 0.28) });
-        certPage.drawText(def.label || field.type, { x: marginX + 30, y: lineY, size: 8, font: boldFont, color: rgb(0.09, 0.09, 0.13) });
-        certPage.drawText(`Page ${field.pageIndex + 1}`, { x: marginX + 160, y: lineY, size: 8, font, color: rgb(0.2, 0.22, 0.28) });
-        certPage.drawText(field.assignedTo === 'recipient' ? 'Recipient' : 'Self / Owner', { x: marginX + 225, y: lineY, size: 8, font, color: rgb(0.2, 0.22, 0.28) });
-        certPage.drawText('Completed', { x: marginX + 330, y: lineY, size: 8, font: boldFont, color: rgb(0.07, 0.49, 0.32) });
-
-        y -= 16;
-        certPage.drawLine({
-          start: { x: marginX, y },
-          end: { x: width - marginX, y },
-          thickness: 0.5,
-          color: rgb(0.92, 0.93, 0.95)
-        });
+      const certPage = pdfDoc.addPage([size.width, size.height]);
+      for (const op of ops) {
+        if (op.op === 'text') {
+          certPage.drawText(op.text, { x: op.x, y: op.y, size: op.size, font: op.bold ? boldFont : font, color: rgb(...op.color) });
+        } else if (op.op === 'line') {
+          certPage.drawLine({ start: { x: op.x1, y: op.y1 }, end: { x: op.x2, y: op.y2 }, thickness: op.thickness, color: rgb(...op.color) });
+        } else if (op.op === 'rect') {
+          const rect = { x: op.x, y: op.y, width: op.width, height: op.height, color: rgb(...op.color) };
+          if (op.borderColor) { rect.borderColor = rgb(...op.borderColor); rect.borderWidth = op.borderWidth; }
+          certPage.drawRectangle(rect);
+        }
       }
-
-      if (completedFields.length > 10) {
-        y -= 14;
-        certPage.drawText(`... and ${completedFields.length - 10} additional completed field(s) recorded in integrity receipt`, {
-          x: marginX + 8,
-          y,
-          size: 7.5,
-          font,
-          color: rgb(0.41, 0.42, 0.47)
-        });
-      }
-
-      y -= 22;
-
-      const calloutHeight = 68;
-      certPage.drawRectangle({
-        x: marginX,
-        y: y - calloutHeight,
-        width: contentWidth,
-        height: calloutHeight,
-        color: rgb(0.95, 0.94, 1.0),
-        borderColor: rgb(0.8, 0.76, 0.98),
-        borderWidth: 0.75
-      });
-
-      certPage.drawText('INDEPENDENT CRYPTOGRAPHIC VERIFICATION', {
-        x: marginX + 14,
-        y: y - 16,
-        size: 7.5,
-        font: boldFont,
-        color: rgb(0.31, 0.22, 0.96)
-      });
-      certPage.drawText('This certificate is permanently bound into the signed PDF file and sealed upon finalization.', {
-        x: marginX + 14,
-        y: y - 28,
-        size: 8,
-        font: boldFont,
-        color: rgb(0.09, 0.09, 0.13)
-      });
-      certPage.drawText('To independently verify byte-for-byte authenticity, upload this file and its companion Integrity receipt', {
-        x: marginX + 14,
-        y: y - 40,
-        size: 7.5,
-        font,
-        color: rgb(0.2, 0.22, 0.28)
-      });
-      certPage.drawText(`(${state.verificationId}.json) to SignTrail Verify. The signed SHA-256 fingerprint guarantees zero post-sign modification.`, {
-        x: marginX + 14,
-        y: y - 52,
-        size: 7.5,
-        font,
-        color: rgb(0.2, 0.22, 0.28)
-      });
-
-      certPage.drawLine({
-        start: { x: marginX, y: 36 },
-        end: { x: width - marginX, y: 36 },
-        thickness: 0.5,
-        color: rgb(0.89, 0.89, 0.92)
-      });
-      certPage.drawText('SignTrail v0.3.3 - Portable Trust - Browser-Attested Integrity', {
-        x: marginX,
-        y: 24,
-        size: 7.5,
-        font,
-        color: rgb(0.41, 0.42, 0.47)
-      });
-      const footerRight = `Verification ID: ${state.verificationId}`;
-      certPage.drawText(footerRight, {
-        x: width - marginX - boldFont.widthOfTextAtSize(footerRight, 7.5),
-        y: 24,
-        size: 7.5,
-        font: boldFont,
-        color: rgb(0.41, 0.42, 0.47)
-      });
     }
 
     async function buildSignedPdfBytes() {
@@ -1533,7 +1352,7 @@
         state.signedHash = await sha256Hex(state.signedBytes);
         addEvent('document_finalized', 'Document finalized and editor locked', { verificationId: state.verificationId });
         if (state.appendCertificate) {
-          addEvent('certificate_appended', 'Certificate of Completion generated and appended', { pageIndex: state.pdf.numPages });
+          addEvent('certificate_appended', 'Certificate of Completion generated and appended');
         }
         addEvent('signed_fingerprint_created', 'Signed document fingerprint created', { signedHash: state.signedHash });
         state.proofCapsule = await buildProofCapsule();
@@ -2217,10 +2036,11 @@
           ['Expected SHA-256', capsule.signedHash],
           ['Observed SHA-256', actualHash]
         ];
+        const matches = actualHash.toLowerCase() === capsule.signedHash.toLowerCase();
         if (hasCertEvent) {
-          details.push(['Certificate of Completion', 'Appended to signed PDF & verified']);
+          details.push(['Certificate of Completion', matches ? 'Appended to signed PDF & verified' : 'Recorded in receipt, not verified']);
         }
-        if (actualHash.toLowerCase() === capsule.signedHash.toLowerCase()) {
+        if (matches) {
           setVerificationResult('verified', 'Verified', 'The signed PDF matches exactly', 'The uploaded PDF is byte-for-byte identical to the file fingerprint recorded when this package was finalized.', details);
         } else {
           setVerificationResult('modified', 'Mismatch detected', 'This PDF does not match the receipt', 'The Integrity receipt is structurally valid, but the uploaded PDF has a different SHA-256 fingerprint. It may be a different export or may have changed.', details);
@@ -2449,37 +2269,6 @@
         if (state.pdf && el.signatureModal.classList.contains('hidden')) renderDocument().catch(console.error);
       }, 180);
     });
-
-    function getStoredTheme() {
-      try {
-        return localStorage.getItem('signtrail-theme') || 'dark';
-      } catch {
-        return 'dark';
-      }
-    }
-
-    function applyTheme(theme) {
-      const mode = theme === 'light' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', mode);
-      const metaTheme = document.querySelector('meta[name="theme-color"]');
-      if (metaTheme) {
-        metaTheme.setAttribute('content', mode === 'dark' ? '#0c0d14' : '#ececf2');
-      }
-      try {
-        localStorage.setItem('signtrail-theme', mode);
-      } catch {}
-    }
-
-    function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme') || getStoredTheme();
-      const next = current === 'light' ? 'dark' : 'light';
-      applyTheme(next);
-    }
-
-    el.themeToggleLanding?.addEventListener('click', toggleTheme);
-    el.themeToggleVerifier?.addEventListener('click', toggleTheme);
-    el.themeToggleTop?.addEventListener('click', toggleTheme);
-    applyTheme(getStoredTheme());
 
     bootstrapFromUrl().catch(error => {
       console.error(error);
