@@ -51,7 +51,8 @@
       fieldValueTargetId: null,
       lastShareUrl: '',
       lastManageToken: '',
-      hostedRequests: []
+      hostedRequests: [],
+      appendCertificate: true
     };
 
     const el = {
@@ -163,7 +164,10 @@
       refreshHostedButton: document.getElementById('refreshHostedButton'),
       loadingOverlay: document.getElementById('loadingOverlay'),
       loadingText: document.getElementById('loadingText'),
-      toast: document.getElementById('toast')
+      toast: document.getElementById('toast'),
+      appendCertificateInput: document.getElementById('appendCertificateInput'),
+      certStatusValue: document.getElementById('certStatusValue'),
+      completionCertCallout: document.getElementById('completionCertCallout')
     };
 
     let sigCtx = null;
@@ -836,6 +840,13 @@
       el.selfModeButton.disabled = state.finalized || state.recipientMode;
       el.recipientModeButton.disabled = state.finalized || state.recipientMode;
       el.shareCard.classList.toggle('hidden', state.recipientMode || state.finalized);
+      if (el.certStatusValue) {
+        el.certStatusValue.textContent = state.appendCertificate ? 'Attached' : 'Off';
+        el.certStatusValue.className = `status-value ${state.appendCertificate ? 'good' : ''}`;
+      }
+      if (el.appendCertificateInput) {
+        el.appendCertificateInput.disabled = state.finalized;
+      }
 
       if (state.recipientCompleted) {
         el.exportButton.disabled = !state.recipientSignedPdfUrl;
@@ -1094,7 +1105,7 @@
       return lines;
     }
 
-    async function buildPdfBytes({ include = () => true } = {}) {
+    async function buildPdfBytes({ include = () => true, appendCertificate = false } = {}) {
       const completedFields = state.fields.filter(field => field.completed && include(field));
       if (!state.originalBytes) throw new Error('No source PDF is loaded.');
 
@@ -1154,13 +1165,238 @@
           y -= lineHeight;
         }
       }
+      if (appendCertificate) {
+        await appendCertificateOfCompletion(pdfDoc, { font, boldFont, rgb });
+      }
+
       return new Uint8Array(await pdfDoc.save());
+    }
+
+    async function appendCertificateOfCompletion(pdfDoc, { font, boldFont, rgb }) {
+      const pages = pdfDoc.getPages();
+      const firstPage = pages[0];
+      const pageSize = firstPage ? firstPage.getSize() : { width: 612, height: 792 };
+      const certPage = pdfDoc.addPage([pageSize.width, pageSize.height]);
+      const { width, height } = certPage.getSize();
+
+      const marginX = 40;
+      const contentWidth = width - (marginX * 2);
+      let y = height - 42;
+
+      certPage.drawLine({
+        start: { x: marginX, y },
+        end: { x: width - marginX, y },
+        thickness: 3,
+        color: rgb(0.41, 0.33, 1.0)
+      });
+      y -= 22;
+
+      certPage.drawText('SIGNTRAIL - PORTABLE INTEGRITY TRAIL', {
+        x: marginX,
+        y,
+        size: 8,
+        font: boldFont,
+        color: rgb(0.41, 0.33, 1.0)
+      });
+      y -= 18;
+
+      certPage.drawText('Certificate of Completion', {
+        x: marginX,
+        y,
+        size: 18,
+        font: boldFont,
+        color: rgb(0.09, 0.09, 0.13)
+      });
+
+      const verIdText = `ID: ${state.verificationId}`;
+      const verIdWidth = boldFont.widthOfTextAtSize(verIdText, 9);
+      certPage.drawText(verIdText, {
+        x: width - marginX - verIdWidth,
+        y: y + 2,
+        size: 9,
+        font: boldFont,
+        color: rgb(0.41, 0.33, 1.0)
+      });
+      y -= 14;
+
+      certPage.drawText('Cryptographic document manifest and tamper-evident signing record.', {
+        x: marginX,
+        y,
+        size: 8.5,
+        font,
+        color: rgb(0.41, 0.42, 0.47)
+      });
+      y -= 16;
+
+      certPage.drawLine({
+        start: { x: marginX, y },
+        end: { x: width - marginX, y },
+        thickness: 0.75,
+        color: rgb(0.89, 0.89, 0.92)
+      });
+      y -= 20;
+
+      const boxHeight = 110;
+      certPage.drawRectangle({
+        x: marginX,
+        y: y - boxHeight,
+        width: contentWidth,
+        height: boxHeight,
+        color: rgb(0.98, 0.98, 0.99),
+        borderColor: rgb(0.89, 0.89, 0.92),
+        borderWidth: 0.75
+      });
+
+      const signerIdentity = state.recipientAuthenticatedEmail
+        ? `${state.recipientAuthenticatedName || 'Signee'} (${state.recipientAuthenticatedEmail})`
+        : (state.recipientMode ? 'Anonymous Recipient (Verified Bearer Link)' : 'Document Owner / Local Signer');
+
+      const leftColX = marginX + 14;
+      const rightColX = marginX + (contentWidth / 2) + 10;
+      let cardY = y - 18;
+
+      certPage.drawText('DOCUMENT NAME', { x: leftColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
+      certPage.drawText('COMPLETED AT', { x: rightColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
+      cardY -= 12;
+
+      const docName = String(state.file?.name || 'Document.pdf').slice(0, 42);
+      certPage.drawText(docName, { x: leftColX, y: cardY, size: 9, font: boldFont, color: rgb(0.09, 0.09, 0.13) });
+      certPage.drawText(formatDateTime(state.finalizedAt), { x: rightColX, y: cardY, size: 9, font, color: rgb(0.09, 0.09, 0.13) });
+      cardY -= 20;
+
+      certPage.drawText('SIGNER IDENTITY', { x: leftColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
+      certPage.drawText('DOCUMENT SCOPE', { x: rightColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
+      cardY -= 12;
+
+      certPage.drawText(signerIdentity.slice(0, 48), { x: leftColX, y: cardY, size: 8.5, font, color: rgb(0.09, 0.09, 0.13) });
+      certPage.drawText(`${pages.length} Original Page(s) + 1 Certificate Page`, { x: rightColX, y: cardY, size: 8.5, font, color: rgb(0.09, 0.09, 0.13) });
+      cardY -= 20;
+
+      certPage.drawText('ORIGINAL DOCUMENT SHA-256 FINGERPRINT', { x: leftColX, y: cardY, size: 7, font: boldFont, color: rgb(0.41, 0.42, 0.47) });
+      cardY -= 11;
+      certPage.drawText(state.originalHash || 'N/A', { x: leftColX, y: cardY, size: 7.5, font, color: rgb(0.09, 0.09, 0.13) });
+
+      y -= (boxHeight + 24);
+
+      certPage.drawText('FIELD COMPLETION INVENTORY', { x: marginX, y, size: 8, font: boldFont, color: rgb(0.41, 0.33, 1.0) });
+      y -= 14;
+
+      certPage.drawRectangle({
+        x: marginX,
+        y: y - 16,
+        width: contentWidth,
+        height: 18,
+        color: rgb(0.93, 0.93, 0.96)
+      });
+      certPage.drawText('#', { x: marginX + 8, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
+      certPage.drawText('FIELD TYPE', { x: marginX + 30, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
+      certPage.drawText('PAGE', { x: marginX + 160, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
+      certPage.drawText('ASSIGNEE', { x: marginX + 225, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
+      certPage.drawText('STATUS', { x: marginX + 330, y: y - 11, size: 7.5, font: boldFont, color: rgb(0.2, 0.22, 0.28) });
+      y -= 20;
+
+      const completedFields = state.fields.filter(field => field.completed);
+      const displayFields = completedFields.slice(0, 10);
+      for (let i = 0; i < displayFields.length; i++) {
+        const field = displayFields[i];
+        const def = FIELD_DEFS[field.type] || FIELD_DEFS.text;
+        const lineY = y - 11;
+
+        certPage.drawText(String(i + 1), { x: marginX + 8, y: lineY, size: 8, font, color: rgb(0.2, 0.22, 0.28) });
+        certPage.drawText(def.label || field.type, { x: marginX + 30, y: lineY, size: 8, font: boldFont, color: rgb(0.09, 0.09, 0.13) });
+        certPage.drawText(`Page ${field.pageIndex + 1}`, { x: marginX + 160, y: lineY, size: 8, font, color: rgb(0.2, 0.22, 0.28) });
+        certPage.drawText(field.assignedTo === 'recipient' ? 'Recipient' : 'Self / Owner', { x: marginX + 225, y: lineY, size: 8, font, color: rgb(0.2, 0.22, 0.28) });
+        certPage.drawText('Completed', { x: marginX + 330, y: lineY, size: 8, font: boldFont, color: rgb(0.07, 0.49, 0.32) });
+
+        y -= 16;
+        certPage.drawLine({
+          start: { x: marginX, y },
+          end: { x: width - marginX, y },
+          thickness: 0.5,
+          color: rgb(0.92, 0.93, 0.95)
+        });
+      }
+
+      if (completedFields.length > 10) {
+        y -= 14;
+        certPage.drawText(`... and ${completedFields.length - 10} additional completed field(s) recorded in integrity receipt`, {
+          x: marginX + 8,
+          y,
+          size: 7.5,
+          font,
+          color: rgb(0.41, 0.42, 0.47)
+        });
+      }
+
+      y -= 22;
+
+      const calloutHeight = 68;
+      certPage.drawRectangle({
+        x: marginX,
+        y: y - calloutHeight,
+        width: contentWidth,
+        height: calloutHeight,
+        color: rgb(0.95, 0.94, 1.0),
+        borderColor: rgb(0.8, 0.76, 0.98),
+        borderWidth: 0.75
+      });
+
+      certPage.drawText('INDEPENDENT CRYPTOGRAPHIC VERIFICATION', {
+        x: marginX + 14,
+        y: y - 16,
+        size: 7.5,
+        font: boldFont,
+        color: rgb(0.31, 0.22, 0.96)
+      });
+      certPage.drawText('This certificate is permanently bound into the signed PDF file and sealed upon finalization.', {
+        x: marginX + 14,
+        y: y - 28,
+        size: 8,
+        font: boldFont,
+        color: rgb(0.09, 0.09, 0.13)
+      });
+      certPage.drawText('To independently verify byte-for-byte authenticity, upload this file and its companion Integrity receipt', {
+        x: marginX + 14,
+        y: y - 40,
+        size: 7.5,
+        font,
+        color: rgb(0.2, 0.22, 0.28)
+      });
+      certPage.drawText(`(${state.verificationId}.json) to SignTrail Verify. The signed SHA-256 fingerprint guarantees zero post-sign modification.`, {
+        x: marginX + 14,
+        y: y - 52,
+        size: 7.5,
+        font,
+        color: rgb(0.2, 0.22, 0.28)
+      });
+
+      certPage.drawLine({
+        start: { x: marginX, y: 36 },
+        end: { x: width - marginX, y: 36 },
+        thickness: 0.5,
+        color: rgb(0.89, 0.89, 0.92)
+      });
+      certPage.drawText('SignTrail v0.3.3 - Portable Trust - Browser-Attested Integrity', {
+        x: marginX,
+        y: 24,
+        size: 7.5,
+        font,
+        color: rgb(0.41, 0.42, 0.47)
+      });
+      const footerRight = `Verification ID: ${state.verificationId}`;
+      certPage.drawText(footerRight, {
+        x: width - marginX - boldFont.widthOfTextAtSize(footerRight, 7.5),
+        y: 24,
+        size: 7.5,
+        font: boldFont,
+        color: rgb(0.41, 0.42, 0.47)
+      });
     }
 
     async function buildSignedPdfBytes() {
       const completedFields = state.fields.filter(field => field.completed);
       if (!completedFields.length) throw new Error('Complete at least one field before finalizing.');
-      return buildPdfBytes();
+      return buildPdfBytes({ appendCertificate: Boolean(state.appendCertificate) });
     }
 
     async function buildPreparedPdfBytes() {
@@ -1212,6 +1448,9 @@
       el.completionTime.textContent = formatDateTime(state.finalizedAt);
       el.completionOriginalHash.textContent = state.originalHash;
       el.completionSignedHash.textContent = state.signedHash;
+      if (el.completionCertCallout) {
+        el.completionCertCallout.classList.toggle('hidden', !state.appendCertificate);
+      }
       el.completionModal.classList.remove('hidden');
     }
 
@@ -1285,11 +1524,14 @@
       setLoading(true, state.recipientMode ? 'Finalizing and returning signed package…' : 'Finalizing exact signed bytes…');
       el.exportButton.disabled = true;
       try {
-        state.signedBytes = await buildSignedPdfBytes();
-        state.signedHash = await sha256Hex(state.signedBytes);
         state.verificationId = createVerificationId();
         state.finalizedAt = new Date().toISOString();
+        state.signedBytes = await buildSignedPdfBytes();
+        state.signedHash = await sha256Hex(state.signedBytes);
         addEvent('document_finalized', 'Document finalized and editor locked', { verificationId: state.verificationId });
+        if (state.appendCertificate) {
+          addEvent('certificate_appended', 'Certificate of Completion generated and appended', { pageIndex: state.pdf.numPages });
+        }
         addEvent('signed_fingerprint_created', 'Signed document fingerprint created', { signedHash: state.signedHash });
         state.proofCapsule = await buildProofCapsule();
         let hostedResult = null;
@@ -1965,12 +2207,16 @@
           return;
         }
         const actualHash = await sha256Hex(new Uint8Array(await state.verifyPdfFile.arrayBuffer()));
+        const hasCertEvent = (capsule.events || []).some(e => e.type === 'certificate_appended');
         const details = [
           ['Verification ID', capsule.verificationId],
           ['Completed', formatDateTime(capsule.completedAt)],
           ['Expected SHA-256', capsule.signedHash],
           ['Observed SHA-256', actualHash]
         ];
+        if (hasCertEvent) {
+          details.push(['Certificate of Completion', 'Appended to signed PDF & verified']);
+        }
         if (actualHash.toLowerCase() === capsule.signedHash.toLowerCase()) {
           setVerificationResult('verified', 'Verified', 'The signed PDF matches exactly', 'The uploaded PDF is byte-for-byte identical to the file fingerprint recorded when this package was finalized.', details);
         } else {
@@ -2034,6 +2280,8 @@
       state.fieldValueTargetId = null;
       state.lastShareUrl = '';
       state.lastManageToken = '';
+      state.appendCertificate = true;
+      if (el.appendCertificateInput) el.appendCertificateInput.checked = true;
       state.verifyPdfFile = null;
       state.verifyCapsuleFile = null;
       el.documentStack.replaceChildren();
@@ -2045,6 +2293,11 @@
       setWorkflowMode('self');
       updateStatus();
     }
+
+    el.appendCertificateInput?.addEventListener('change', event => {
+      state.appendCertificate = Boolean(event.target.checked);
+      updateStatus();
+    });
 
     el.openHistoryButton.addEventListener('click', openHistoryModal);
     el.historyTopButton.addEventListener('click', openHistoryModal);

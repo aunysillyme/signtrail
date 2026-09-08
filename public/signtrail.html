@@ -123,6 +123,12 @@
           <strong>Recipient delivery</strong>
           <p>When every fill-now field is ready, use <strong>Finalize recipient document</strong> in the top bar. After the exact document is locked, SignTrail will show a separate <strong>Create signee link</strong> step.</p>
         </div>
+        <div class="cert-option-card">
+          <label class="cert-toggle-label">
+            <input id="appendCertificateInput" type="checkbox" checked />
+            <span><strong>Attach Completion Certificate</strong><small>Appends a sealed tamper-evident audit page with SHA-256 fingerprint &amp; field trail to the signed PDF.</small></span>
+          </label>
+        </div>
       </aside>
 
       <section id="viewer" class="viewer" aria-label="PDF document workspace">
@@ -138,6 +144,7 @@
           <div class="status-row"><span>Required left</span><span id="requiredCount" class="status-value">0</span></div>
           <div class="status-row"><span>Document</span><span id="documentState" class="status-value">Editing</span></div>
           <div class="status-row"><span>PDF processing</span><span class="status-value good">Browser</span></div>
+          <div class="status-row"><span>Certificate</span><span id="certStatusValue" class="status-value good">Attached</span></div>
         </div>
         <h2 class="panel-title" style="margin-top:18px">Original SHA-256</h2>
         <div id="hashBox" class="hash-box">Calculating…</div>
@@ -230,6 +237,10 @@
         <div class="proof-hash"><strong>Original SHA-256</strong><br /><span id="completionOriginalHash"></span><br /><br /><strong>Signed SHA-256</strong><br /><span id="completionSignedHash"></span></div>
         <p class="proof-note">The editor is now locked. Download both files as a pair. The Integrity receipt contains document fingerprints and a privacy-safe event trail, never the handwritten signature image.</p>
         <div class="handoff-callout"><strong>Ready to hand off:</strong> export one ZIP containing the exact signed PDF, its Integrity receipt, and verification instructions for recipients or additional signees.</div>
+        <div id="completionCertCallout" class="cert-callout">
+          <span class="check">✓</span>
+          <span><strong>Certificate of Completion attached:</strong> The signed PDF contains a permanent cryptographic audit page with original SHA-256 fingerprint, timestamps, and field inventory.</span>
+        </div>
       </div>
       <footer class="modal-foot">
         <div class="completion-actions">

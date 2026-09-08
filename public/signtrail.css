@@ -391,3 +391,63 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Certificate of Completion additions */
+.cert-option-card {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .03);
+}
+.cert-toggle-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink);
+  user-select: none;
+}
+.cert-toggle-label input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.cert-toggle-label span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cert-toggle-label strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.cert-toggle-label small {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.cert-callout {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(105, 85, 255, .2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.4;
+}
+.cert-callout .check {
+  color: var(--accent-2);
+  font-weight: 800;
+  font-size: 14px;
+}
+
