@@ -13,7 +13,13 @@
   <main id="landing" class="landing">
     <nav class="landing-nav">
       <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>SignTrail</span></div>
-      <div class="privacy-pill"><span class="privacy-dot"></span>Local signing · Hosted links only when requested</div>
+      <div class="landing-nav-right">
+        <div class="privacy-pill"><span class="privacy-dot"></span>Local signing · Hosted links only when requested</div>
+        <button id="themeToggleLanding" class="theme-toggle-btn" type="button" aria-label="Toggle dark or light theme" title="Toggle theme">
+          <span class="theme-icon light-icon" aria-hidden="true">☀️</span>
+          <span class="theme-icon dark-icon" aria-hidden="true">🌙</span>
+        </button>
+      </div>
     </nav>
 
     <section class="hero">
@@ -53,7 +59,13 @@
   <main id="verifier" class="verification-screen hidden">
     <nav class="verification-nav">
       <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>SignTrail Verify</span></div>
-      <button id="backFromVerifierButton" class="ghost-btn" type="button">Back</button>
+      <div class="top-actions">
+        <button id="themeToggleVerifier" class="theme-toggle-btn" type="button" aria-label="Toggle dark or light theme" title="Toggle theme">
+          <span class="theme-icon light-icon" aria-hidden="true">☀️</span>
+          <span class="theme-icon dark-icon" aria-hidden="true">🌙</span>
+        </button>
+        <button id="backFromVerifierButton" class="ghost-btn" type="button">Back</button>
+      </div>
     </nav>
     <section class="verification-shell">
       <div class="verification-heading">
@@ -95,6 +107,10 @@
       </div>
       <div id="recipientBanner" class="recipient-banner">Signature request opened</div>
       <div class="top-actions">
+        <button id="themeToggleTop" class="theme-toggle-btn" type="button" aria-label="Toggle dark or light theme" title="Toggle theme">
+          <span class="theme-icon light-icon" aria-hidden="true">☀️</span>
+          <span class="theme-icon dark-icon" aria-hidden="true">🌙</span>
+        </button>
         <button id="historyTopButton" class="ghost-btn" type="button">History &amp; links</button>
         <button id="newDocumentButton" class="ghost-btn" type="button">New document</button>
         <button id="exportButton" class="primary-btn" type="button" disabled>Finalize document</button>
@@ -281,10 +297,10 @@
   </div>
   <div id="toast" class="toast hidden" role="status"></div>
 
-  <script type="module" src="pdf-loader.mjs"></script>
-  <script src="vendor/pdf-lib.min.js" defer></script>
-  <script src="vendor/jszip.min.js" defer></script>
-  <script src="signtrail.js" defer></script>
+  <script type="module" src="/pdf-loader.mjs"></script>
+  <script src="/vendor/pdf-lib.min.js" defer></script>
+  <script src="/vendor/jszip.min.js" defer></script>
+  <script src="/signtrail.js" defer></script>
 
 </body>
 </html>

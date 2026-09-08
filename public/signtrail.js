@@ -59,6 +59,9 @@
       landing: document.getElementById('landing'),
       verifier: document.getElementById('verifier'),
       app: document.getElementById('app'),
+      themeToggleLanding: document.getElementById('themeToggleLanding'),
+      themeToggleVerifier: document.getElementById('themeToggleVerifier'),
+      themeToggleTop: document.getElementById('themeToggleTop'),
       openVerifierButton: document.getElementById('openVerifierButton'),
       openHistoryButton: document.getElementById('openHistoryButton'),
       backFromVerifierButton: document.getElementById('backFromVerifierButton'),
@@ -2446,6 +2449,37 @@
         if (state.pdf && el.signatureModal.classList.contains('hidden')) renderDocument().catch(console.error);
       }, 180);
     });
+
+    function getStoredTheme() {
+      try {
+        return localStorage.getItem('signtrail-theme') || 'dark';
+      } catch {
+        return 'dark';
+      }
+    }
+
+    function applyTheme(theme) {
+      const mode = theme === 'light' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', mode);
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) {
+        metaTheme.setAttribute('content', mode === 'dark' ? '#0c0d14' : '#ececf2');
+      }
+      try {
+        localStorage.setItem('signtrail-theme', mode);
+      } catch {}
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || getStoredTheme();
+      const next = current === 'light' ? 'dark' : 'light';
+      applyTheme(next);
+    }
+
+    el.themeToggleLanding?.addEventListener('click', toggleTheme);
+    el.themeToggleVerifier?.addEventListener('click', toggleTheme);
+    el.themeToggleTop?.addEventListener('click', toggleTheme);
+    applyTheme(getStoredTheme());
 
     bootstrapFromUrl().catch(error => {
       console.error(error);
