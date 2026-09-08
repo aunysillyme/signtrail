@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from playwright.async_api import async_playwright
 
-ROOT = Path('/mnt/data/SignTrail_v0.3.3_POST_FINALIZE_SIGNEE_LINK')
+ROOT = Path(__file__).resolve().parent.parent
 BASE = 'https://signtrail.test'
 EVIDENCE = ROOT / 'evidence'
 EVIDENCE.mkdir(exist_ok=True)
