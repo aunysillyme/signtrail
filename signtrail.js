@@ -433,11 +433,11 @@
           disableJavaScript: true,
           enableXfa: false,
           isEvalSupported: false,
-          cMapUrl: '/vendor/pdfjs/cmaps/',
+          cMapUrl: './vendor/pdfjs/cmaps/',
           cMapPacked: true,
-          iccUrl: '/vendor/pdfjs/iccs/',
-          standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
-          wasmUrl: '/vendor/pdfjs/wasm/',
+          iccUrl: './vendor/pdfjs/iccs/',
+          standardFontDataUrl: './vendor/pdfjs/standard_fonts/',
+          wasmUrl: './vendor/pdfjs/wasm/',
           useWorkerFetch: true
         });
         const pdf = await loadingTask.promise;
